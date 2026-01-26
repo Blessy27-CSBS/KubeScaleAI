@@ -1,0 +1,6 @@
+
+{
+  "name": "KubeScale AI - Predictive Kubernetes Orchestrator",
+  "description": "An AI-powered dashboard that analyzes real-time website traffic using Google Search and predicts Kubernetes scaling requirements to prevent downtime.",
+  "requestFramePermissions": []
+}

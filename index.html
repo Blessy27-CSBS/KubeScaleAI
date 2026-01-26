@@ -1,0 +1,98 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KubeScale AI | AI Orchestrator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            colors: {
+              brand: {
+                beige: '#F8FAFC',     // Light slate background
+                rose: '#10B981',      // Vibrant emerald green primary
+                darkRose: '#059669',  // Darker emerald
+                cream: '#FFFFFF',     // Pure white surfaces
+                brown: '#0F172A',     // Dark slate text
+                softPink: '#F1F5F9',  // Lightest slate surfaces
+                accent: '#34D399'      // Light emerald
+              }
+            },
+            fontFamily: {
+              sans: ['Plus Jakarta Sans', 'sans-serif'],
+              serif: ['Playfair Display', 'serif'],
+            },
+            borderRadius: {
+              'hero': '12rem',
+            }
+          }
+        }
+      }
+    </script>
+    <style>
+        body {
+            transition: background-color 0.5s ease;
+            background-color: #F8FAFC;
+            color: #0F172A;
+        }
+        .organic-arches {
+            border-top-left-radius: 10rem;
+            border-top-right-radius: 10rem;
+        }
+        .soft-shadow {
+            box-shadow: 0 20px 60px -15px rgba(0, 0, 0, 0.05);
+        }
+        .tape-effect {
+            position: relative;
+        }
+        .tape-effect::after {
+            content: '';
+            position: absolute;
+            top: -10px;
+            left: 50%;
+            transform: translateX(-50%) rotate(-2deg);
+            width: 80px;
+            height: 25px;
+            background: rgba(16, 185, 129, 0.15);
+            backdrop-filter: blur(2px);
+            z-index: 10;
+        }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #E2E8F0; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #10B981; }
+        
+        /* Glass Effect */
+        .glass-card {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+        }
+
+        .designer-shadow {
+            box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.04);
+        }
+    </style>
+<script type="importmap">
+{
+  "imports": {
+    "react/": "https://esm.sh/react@^19.2.3/",
+    "react": "https://esm.sh/react@^19.2.3",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+    "@google/genai": "https://esm.sh/@google/genai@^1.34.0",
+    "recharts": "https://esm.sh/recharts@^3.6.0"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
+<body class="text-brand-brown">
+    <div id="root"></div>
+<script type="module" src="/index.tsx"></script>
+</body>
+</html>
