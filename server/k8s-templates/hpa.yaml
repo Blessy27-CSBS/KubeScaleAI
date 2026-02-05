@@ -1,0 +1,27 @@
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: ${appName}-hpa
+  namespace: ${namespace}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: ${appName}
+  minReplicas: ${minReplicas}
+  maxReplicas: ${maxReplicas}
+  metrics:
+  # This uses the Custom Metric exposed by KubeScale Backend
+  - type: Object
+    object:
+      metric:
+        name: kubescale_predicted_traffic
+        selector: {matchLabels: {app: "${appName}", tenant: "${tenantId}"}}
+      describedObject:
+        apiVersion: v1
+        kind: Service
+        name: kubescale-backend
+        namespace: default
+      target:
+        type: Value
+        value: "50" # Target 50 predicted users per pod

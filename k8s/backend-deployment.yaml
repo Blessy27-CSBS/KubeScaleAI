@@ -1,0 +1,29 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kubescale-backend
+  labels:
+    app: kubescale-backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kubescale-backend
+  template:
+    metadata:
+      labels:
+        app: kubescale-backend
+    spec:
+      containers:
+      - name: backend
+        image: kubescale-backend:latest
+        imagePullPolicy: IfNotPresent # Use local image for Minikube/Dev
+        ports:
+        - containerPort: 3001
+        resources:
+          limits:
+            memory: "256Mi"
+            cpu: "500m"
+          requests:
+            memory: "128Mi"
+            cpu: "250m"

@@ -1,13 +1,13 @@
 import Groq from "groq-sdk";
-import { PredictionResult } from "../types";
+import { PredictionResult, ChatMessage } from "../types";
 
 const groq = new Groq({
-    apiKey: process.env.API_KEY,
+    apiKey: import.meta.env.VITE_GROQ_API_KEY,
     dangerouslyAllowBrowser: true
 });
 
 const searchTavily = async (query: string) => {
-    const apiKey = process.env.TAVILY_API_KEY;
+    const apiKey = import.meta.env.VITE_TAVILY_API_KEY;
     if (!apiKey) {
         console.warn("Tavily API Key missing. Falling back to AI hallucination.");
         return null;
@@ -101,7 +101,7 @@ export const getQuickAdvice = async (query: string): Promise<string> => {
     return completion.choices[0]?.message?.content || "No response received.";
 };
 
-export const startComplexChat = async (history: any[], prediction: PredictionResult | null) => {
+export const startComplexChat = async (history: ChatMessage[], prediction: PredictionResult | null) => {
     let dynamicInstruction = "You are Nova AI, a deep-thinking AI Cloud Engineer. You help users design resilient, auto-scaling Kubernetes architectures. Explain your reasoning steps clearly.";
 
     if (prediction) {
@@ -114,7 +114,7 @@ export const startComplexChat = async (history: any[], prediction: PredictionRes
 Use these specific metrics when answering user questions about the current state of the cluster.`;
     }
 
-    const formattedHistory = history.map((msg: any) => ({
+    const formattedHistory = history.map((msg) => ({
         role: msg.role === 'model' ? 'assistant' : 'user',
         content: msg.content
     }));

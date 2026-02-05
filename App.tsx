@@ -1,14 +1,18 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Pod, PodStatus, TrafficData, PredictionResult } from './types';
+import { Pod, PodStatus, TrafficData, PredictionResult, User } from './types';
 import Header from './components/Header';
 import OverviewTab from './components/tabs/OverviewTab';
 import ClusterTab from './components/tabs/ClusterTab';
 import MetricsTab from './components/tabs/MetricsTab';
+import CostTab from './components/tabs/CostTab';
+import DeployTab from './components/tabs/DeployTab';
 import LogsTab from './components/tabs/LogsTab';
 import SettingsPage from './components/SettingsPage';
 import LoginPage from './components/LoginPage';
 import ChatInterface from './components/ChatInterface';
 import { analyzeUrlTraffic } from './services/groqService';
+import { TenantDashboard } from './components/pages/TenantDashboard';
+import { AppDashboard } from './components/pages/AppDashboard';
 
 export interface ScalingLog {
   id: string;
@@ -17,12 +21,13 @@ export interface ScalingLog {
   message: string;
 }
 
-export type AppView = 'overview' | 'infrastructure' | 'metrics' | 'events' | 'settings';
+export type AppView = 'deploy' | 'overview' | 'infrastructure' | 'metrics' | 'cost' | 'events' | 'settings' | 'tenants' | 'apps';
 
 const App: React.FC = () => {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [user, setUser] = useState<User | null>(null);
   const [currentView, setCurrentView] = useState<AppView>('overview');
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
+  const [isRealClusterMode, setIsRealClusterMode] = useState(false);
 
   const [url, setUrl] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -47,98 +52,140 @@ const App: React.FC = () => {
   }, []);
 
   // Kubernetes HPA Simulation Loop
+  // Unified Backend/Simulation Loop
   useEffect(() => {
-    if (!isLoggedIn || !prediction) return;
+    if (!user) return;
 
-    const interval = setInterval(() => {
+    let isMounted = true;
+    let backendAvailable = false;
+
+    const syncWithBackend = async () => {
+      try {
+        // Fetch Pods
+        const podRes = await fetch('http://localhost:3001/api/pods');
+        if (!podRes.ok) throw new Error('Backend unreachable');
+        const podData = await podRes.json();
+
+        // Fetch Traffic State
+        const stateRes = await fetch('http://localhost:3001/api/state');
+        const stateData = await stateRes.json();
+
+        if (isMounted) {
+          if (!backendAvailable) {
+            addLog("Connected to KubeScale Orchestration Backend.", "info");
+            backendAvailable = true;
+          }
+
+          if (podData.pods) {
+            setPods(podData.pods.map((p: any) => ({
+              ...p,
+              status: p.status === 'RUNNING' ? PodStatus.RUNNING
+                : p.status === 'PENDING' ? PodStatus.PENDING
+                  : p.status === 'TERMINATING' ? PodStatus.TERMINATING
+                    : PodStatus.FAILED
+            })));
+          }
+
+          // Update Traffic History from Backend State
+          const currentUsers = Object.values(stateData.traffic || {}).reduce((a: any, b: any) => a + b, 0) as number;
+
+          setTrafficHistory(prev => {
+            const activePods = podData.pods.filter((p: any) => p.status === 'RUNNING');
+            const avgCpu = activePods.length > 0
+              ? activePods.reduce((acc: any, p: any) => acc + p.cpu, 0) / activePods.length
+              : 0;
+            const avgMemory = activePods.length > 0
+              ? activePods.reduce((acc: any, p: any) => acc + p.memory, 0) / activePods.length
+              : 0;
+
+            const newData = {
+              timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+              users: currentUsers || 0,
+              pods: activePods.length,
+              cpu: avgCpu,
+              memory: avgMemory
+            };
+            return [...prev, newData].slice(-40);
+          });
+        }
+      } catch (e) {
+        // Fallback to Frontend Simulation if backend is down
+        if (backendAvailable) {
+          addLog("Lost connection to backend. Reverting to local simulation.", "error");
+          backendAvailable = false;
+        }
+        runFrontendSimulation();
+      }
+    };
+
+    const runFrontendSimulation = () => {
+      if (!prediction) return;
+
       const targetCount = prediction.recommendedPods;
 
+      // Update Pods
       setPods(prevPods => {
         let nextPods = [...prevPods];
-
-        // 1. Clean up pods that finished terminating
-        const beforeCount = nextPods.length;
         nextPods = nextPods.filter(p => p.status !== PodStatus.TERMINATING || Math.random() > 0.4);
-        if (beforeCount > nextPods.length) {
-          addLog(`Resource cleanup: Removed ${beforeCount - nextPods.length} terminated pod(s).`);
-        }
-
-        // 2. Resource mutation and Pending->Running transition
         nextPods = nextPods.map(p => {
-          if (p.status === PodStatus.PENDING && Math.random() > 0.6) {
-            addLog(`Pod ${p.name} transition: READY`, 'scaling');
-            return { ...p, status: PodStatus.RUNNING };
-          }
+          if (p.status === PodStatus.PENDING && Math.random() > 0.6) return { ...p, status: PodStatus.RUNNING };
           if (p.status === PodStatus.RUNNING) {
-            return {
-              ...p,
-              cpu: Math.max(5, Math.min(95, p.cpu + (Math.random() * 8 - 4))),
-              memory: Math.max(64, Math.min(480, p.memory + (Math.random() * 16 - 8)))
-            };
+            return { ...p, cpu: Math.max(5, Math.min(95, p.cpu + (Math.random() * 8 - 4))) };
           }
           return p;
         });
-
-        // 3. Scaling Reconciler
         const activeCount = nextPods.filter(p => p.status !== PodStatus.TERMINATING).length;
         const diff = targetCount - activeCount;
 
         if (diff > 0) {
           const toAdd = Math.min(diff, 2);
-          addLog(`HPA Scaling: Adding ${toAdd} pod(s) to meet target demand.`, 'scaling');
           for (let i = 0; i < toAdd; i++) {
             nextPods.push({
-              id: `pod-${Math.random().toString(36).substr(2, 6)}`,
+              id: `sim-${Math.random()}`,
               name: `worker-${Math.random().toString(36).substr(2, 4)}`,
               status: PodStatus.PENDING,
-              cpu: 0,
-              memory: 128,
-              startTime: Date.now()
+              cpu: 0, memory: 128, startTime: Date.now()
             });
           }
         } else if (diff < 0) {
           const toRemove = Math.min(Math.abs(diff), 2);
-          addLog(`HPA Scaling: Terminating ${toRemove} pod(s) due to over-provisioning.`, 'scaling');
-          let removedCount = 0;
+          let removed = 0;
           nextPods = nextPods.map(p => {
-            if (removedCount < toRemove && p.status === PodStatus.RUNNING) {
-              removedCount++;
+            if (removed < toRemove && p.status === PodStatus.RUNNING) {
+              removed++;
               return { ...p, status: PodStatus.TERMINATING };
             }
             return p;
           });
         }
-
         return nextPods;
       });
 
-      // Update Traffic history metrics
+      // Update Traffic History (Simulation Fallback)
       setTrafficHistory(prev => {
         const lastUsers = prev.length > 0 ? prev[prev.length - 1].users : prediction.estimatedUsers;
         const volatility = prediction.estimatedUsers * 0.05;
         const jitter = (Math.random() * volatility * 2) - volatility;
-
         const activePods = pods.filter(p => p.status === PodStatus.RUNNING);
-        const avgCpu = activePods.length > 0
-          ? activePods.reduce((acc, p) => acc + p.cpu, 0) / activePods.length
-          : 0;
-        const avgMemory = activePods.length > 0
-          ? activePods.reduce((acc, p) => acc + p.memory, 0) / activePods.length
-          : 0;
 
         const newData = {
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
           users: Math.max(10, Math.floor(lastUsers + jitter)),
           pods: activePods.length,
-          cpu: avgCpu,
-          memory: avgMemory
+          cpu: 50, memory: 256
         };
         return [...prev, newData].slice(-40);
       });
-    }, 2000);
+    };
 
-    return () => clearInterval(interval);
-  }, [isLoggedIn, prediction, addLog, pods.length]);
+    const interval = setInterval(syncWithBackend, 2000);
+    syncWithBackend(); // Initial call
+
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, [user, prediction, addLog]);
 
   const handleAnalyze = async (urlToAnalyze: string) => {
     setIsAnalyzing(true);
@@ -148,6 +195,21 @@ const App: React.FC = () => {
       setPrediction(result);
       setUrl(urlToAnalyze);
       addLog(`Analysis complete. Estimated users: ${result.estimatedUsers.toLocaleString()}.`, 'info');
+
+      // NEW: Send AI Prediction to Backend to drive scaling
+      try {
+        await fetch('http://localhost:3001/api/predict', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            predictedUsers: result.estimatedUsers
+          })
+        });
+        addLog("Scaling signal sent to backend orchestrator.", "scaling");
+      } catch (e) {
+        console.warn("Failed to sync prediction with backend", e);
+      }
+
       setCurrentView('infrastructure');
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Unknown error';
@@ -165,24 +227,41 @@ const App: React.FC = () => {
     }
   };
 
-  if (!isLoggedIn) {
-    return <LoginPage onLogin={() => setIsLoggedIn(true)} />;
+  if (!user) {
+    return <LoginPage onLogin={(u) => setUser(u)} />;
   }
 
   const renderContent = () => {
     switch (currentView) {
+      case 'deploy':
+        return <DeployTab onNavigate={setCurrentView} />;
       case 'overview':
-        return <OverviewTab url={url} onAnalyze={handleAnalyze} isAnalyzing={isAnalyzing} prediction={prediction} />;
+        return <OverviewTab url={url} onAnalyze={handleAnalyze} isAnalyzing={isAnalyzing} prediction={prediction} onNavigate={setCurrentView} />;
       case 'infrastructure':
         return <ClusterTab pods={pods} prediction={prediction} />;
       case 'metrics':
         return <MetricsTab trafficHistory={trafficHistory} prediction={prediction} />;
+      case 'cost':
+        return <CostTab prediction={prediction} pods={pods} />;
       case 'events':
         return <LogsTab logs={logs} prediction={prediction} />;
       case 'settings':
-        return <SettingsPage theme={theme} onThemeChange={setTheme} />;
+        return (
+          <SettingsPage
+            theme={theme}
+            onThemeChange={setTheme}
+            user={user}
+            isRealClusterMode={isRealClusterMode}
+            onToggleRealClusterMode={setIsRealClusterMode}
+          />
+        );
+      case 'tenants':
+        return <TenantDashboard />;
+      case 'apps':
+        // Hardcoded tenant for now, in real app this would selection based
+        return <AppDashboard />;
       default:
-        return <OverviewTab url={url} onAnalyze={handleAnalyze} isAnalyzing={isAnalyzing} prediction={prediction} />;
+        return <OverviewTab url={url} onAnalyze={handleAnalyze} isAnalyzing={isAnalyzing} prediction={prediction} onNavigate={setCurrentView} />;
     }
   };
 
@@ -191,7 +270,7 @@ const App: React.FC = () => {
       <Header
         onNavigate={setCurrentView}
         currentView={currentView}
-        onLogout={() => setIsLoggedIn(false)}
+        onLogout={() => setUser(null)}
       />
 
       <div className="flex-1 animate-fadeIn pb-24">

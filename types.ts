@@ -36,3 +36,9 @@ export interface ChatMessage {
   content: string;
   isThinking?: boolean;
 }
+
+export interface User {
+  email: string;
+  organizationId: string;
+  role: 'admin' | 'viewer';
+}

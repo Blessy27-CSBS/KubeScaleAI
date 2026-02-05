@@ -1,0 +1,29 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kubescale-frontend
+  labels:
+    app: kubescale-frontend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kubescale-frontend
+  template:
+    metadata:
+      labels:
+        app: kubescale-frontend
+    spec:
+      containers:
+      - name: frontend
+        image: kubescale-frontend:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 80
+        resources:
+          limits:
+            memory: "256Mi"
+            cpu: "500m"
+          requests:
+            memory: "128Mi"
+            cpu: "250m"
